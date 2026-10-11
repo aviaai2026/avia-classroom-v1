@@ -485,9 +485,8 @@ OUTPUT REQUIREMENTS
                     "summary",
                     summary_data,
                 )
-            except Exception:
-                print("Summary cache save failed. Check the backend logs.")
-
+            except Exception as error:
+             print(f"Summary generation failed: {type(error).__name__}: {error}")
         return {
             "message": "Summary generated successfully.",
             **summary_data,
@@ -647,12 +646,12 @@ Return valid JSON only, using this exact structure:
             detail="AVIA could not format the flashcards correctly. Please try again.",
         )
 
-    except Exception:
-        raise HTTPException(
-            status_code=502,
-            detail="Flashcard generation failed. Please try again.",
-        )
-
+    except Exception as error:
+     print(f"Flashcard generation failed: {type(error).__name__}: {error}")
+    raise HTTPException(
+        status_code=502,
+        detail="Flashcard generation failed. Please try again.",
+    )
 
 
 # Generate a multiple-choice quiz from the student's uploaded study material.
@@ -766,8 +765,9 @@ async def generate_quiz(payload: dict, request: Request):
             status_code=502,
             detail="The AI could not produce a valid quiz. Please try again."
         )
-    except Exception:
-        raise HTTPException(
-            status_code=502,
-            detail="Quiz generation failed. Please try again."
-        )
+    except Exception as error:
+     print(f"Quiz generation failed: {type(error).__name__}: {error}")
+    raise HTTPException(
+        status_code=502,
+        detail="Quiz generation failed. Please try again."
+    )
