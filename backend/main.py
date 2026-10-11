@@ -339,8 +339,11 @@ def summarize_material(material: dict, request: Request):
     if SHARED_CACHE_ENABLED:
         try:
             cached_result = get_cached_study_content(cache_key)
-        except Exception:
-            print("Summary cache lookup failed. Check the backend logs.")
+        except Exception as error:
+            print(
+                f"Summary cache lookup failed: "
+                f"{type(error).__name__}: {error}"
+            )
 
     if cached_result is not None:
         return {
@@ -527,9 +530,11 @@ def generate_flashcards(material: dict, request: Request):
     if SHARED_CACHE_ENABLED:
         try:
             cached_result = get_cached_study_content(cache_key)
-        except Exception:
-            print("Flashcard cache lookup failed. Check backend logs.")
-
+        except Exception as error:
+            print(
+                f"Flashcard cache lookup failed: "
+                f"{type(error).__name__}: {error}"
+            )
     if cached_result is not None:
         return {
             "message": "Flashcards loaded from shared cache.",
