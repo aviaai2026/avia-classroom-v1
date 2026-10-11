@@ -3946,7 +3946,8 @@ aviaBackDashboard.addEventListener("click", function () {
  // =========================
  // AVIA CHAT FUNCTIONALITY
  // =========================
-
+// Keeps the conversation context for the current chat session.
+let aviaConversationHistory = [];
  // Creates an AVIA message using the existing logo and chat styling.
  function createAviaMessage() {
     const messageElement = document.createElement("div");
@@ -4043,7 +4044,14 @@ async function sendAviaMessage() {
                 "X-Browser-ID": getAviaBrowserId()
             },
             body: JSON.stringify({
-                message: userMessage
+                message: userMessage,
+                history: [
+                    ...aviaConversationHistory,
+                    {
+                        role: "user",
+                        content: userMessage
+                    }
+                ]
             })
         });
 
@@ -4057,6 +4065,12 @@ async function sendAviaMessage() {
             typeof data.reply === "string"
                 ? data.reply
                 : "AVIA couldn't provide a response.";
+
+        // Save this exchange so follow-up questions retain their context.
+              aviaConversationHistory.push(
+              { role: "user", content: userMessage },
+              { role: "assistant", content: replyText }
+              );
 
         // Replace the thinking indicator with AVIA's actual response.
         aviaMessage.text.innerHTML = DOMPurify.sanitize(

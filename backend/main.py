@@ -173,6 +173,7 @@ def home():
 
 
 # Send the student's message to OpenAI and return AVIA's real response
+
 @app.post("/chat")
 def chat(message: dict, request: Request):
     user_message = message.get("message", "")
@@ -182,19 +183,59 @@ def chat(message: dict, request: Request):
 
     if client is None:
         return {"reply": "AVIA's AI connection is not configured yet."}
-    
+
+    # Keep the existing daily usage limit.
     consume_daily_limit(request, "chat", 10)
 
     try:
+        # Accept only user and assistant messages from the conversation history.
+        raw_history = message.get("history", [])
+        if not isinstance(raw_history, list):
+            raw_history = []
+
+        history = []
+        for item in raw_history[-12:]:
+            if not isinstance(item, dict):
+                continue
+
+            role = item.get("role")
+            content = item.get("content")
+
+            if role not in ("user", "assistant"):
+                continue
+
+            if not isinstance(content, str) or not content.strip():
+                continue
+
+            history.append({
+                "role": role,
+                "content": content.strip()[:4000],
+            })
+
+        # Ensure the current question is included exactly once at the end.
+        current_question = user_message.strip()[:4000]
+        if (
+            not history
+            or history[-1]["role"] != "user"
+            or history[-1]["content"] != current_question
+        ):
+            history.append({
+                "role": "user",
+                "content": current_question,
+            })
+
+        # The instructions are controlled by the server, not the browser.
         response = client.responses.create(
             model="gpt-5.4-mini",
-            input=(
+            instructions=(
                 "You are AVIA, a helpful and friendly study assistant. "
                 "Explain concepts clearly for students. "
-                "Stay focused on education and learning.\n\n"
-                f"Student's message: {user_message.strip()}"
-                
+                "Stay focused on education and learning. "
+                "Use the conversation history to understand follow-up questions. "
+                "If the student says 'it', 'they', 'its types', or similar, "
+                "use the relevant earlier conversation to identify the topic."
             ),
+            input=history,
         )
 
         return {"reply": response.output_text}
