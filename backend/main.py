@@ -100,13 +100,13 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://127.0.0.1:5500",
+        "https://avia-classroom-v1.vercel.app",
         "https://avia-classroom-v1-1nwbp6g7e-aviaaitech-2455.vercel.app",
     ],
     allow_credentials=False,
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["Content-Type", "Authorization", "X-Browser-ID"],
-)
-# Keep the existing project root for temporary PDF extraction
+)# Keep the existing project root for temporary PDF extraction
 PROJECT_DIR = Path(__file__).resolve().parent.parent
 # 10 MB maximum upload size# Shared caching stays disabled until a material is approved by the server.
 MAX_UPLOAD_SIZE = 10 * 1024 * 1024  
