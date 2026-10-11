@@ -1057,7 +1057,7 @@ if (!Array.isArray(savedFlashcards) || savedFlashcards.length === 0) {
 const materialText = await getMaterialTextForSummary(materialId);
 
 
-const response = await fetch("http://127.0.0.1:8000/flashcards", {
+const response = await fetch("https://avia-classroom-v1.onrender.com/flashcards", {
     method: "POST",
     headers: {
         "Content-Type": "application/json",
@@ -1267,7 +1267,7 @@ summarizeButton.addEventListener("click", async function() {
         const materialText = await getMaterialTextForSummary(materialId);
 
         
-const response = await fetch("http://127.0.0.1:8000/summarize", {
+const response = await fetch("https://avia-classroom-v1.onrender.com/summarize", {
     method: "POST",
     headers: {
         "Content-Type": "application/json",
@@ -1717,7 +1717,7 @@ if (typeof materialText !== "string" || materialText.trim().length < 100) {
     );
 }
 
-const response = await fetch("http://127.0.0.1:8000/quiz", {
+const response = await fetch("https://avia-classroom-v1.onrender.com/quiz", {
     method: "POST",
     headers: {
         "Content-Type": "application/json",
@@ -2707,7 +2707,7 @@ textbook.addEventListener(
 
                 const response =
                     await fetch(
-                        "http://127.0.0.1:8000/materials/upload",
+                        "https://avia-classroom-v1.onrender.com/materials/upload",
                         {
                             method: "POST",
                             body: formData
@@ -4036,7 +4036,7 @@ async function sendAviaMessage() {
     aviaChatMessages.scrollTop = aviaChatMessages.scrollHeight;
 
     try {
-        const response = await fetch("http://127.0.0.1:8000/chat", {
+        const response = await fetch("https://avia-classroom-v1.onrender.com/chat", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
