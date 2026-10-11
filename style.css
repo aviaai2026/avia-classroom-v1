@@ -2277,3 +2277,35 @@ body.dark-mode .account-info-close {
 #login-signup-button{
     display: none !important;
 }
+
+/* Mobile chat overflow fix */
+@media (max-width: 600px) {
+    #avia-chat-messages {
+        box-sizing: border-box;
+        max-width: 100%;
+        padding: 12px;
+    }
+
+    .avia-message {
+        min-width: 0;
+        gap: 8px;
+    }
+
+    .avia-message-content {
+        flex: 1;
+        min-width: 0;
+        max-width: 100%;
+        overflow-wrap: anywhere;
+    }
+
+    .avia-message-content img,
+    .avia-message-content pre,
+    .avia-message-content table {
+        max-width: 100%;
+    }
+
+    .avia-message-content pre,
+    .avia-message-content table {
+        overflow-x: auto;
+    }
+}
