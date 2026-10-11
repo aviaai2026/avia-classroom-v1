@@ -1,0 +1,846 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Avia Classroom v1.0</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="app">
+    <aside>
+        <header><h1>Avia Classroom</h1></header>
+        <div class="avia-animated-logo" id="avia-chat-logo">
+
+            <img
+                src="avia.logo/avia-body.png"
+                alt="AVIA"
+                class="avia-logo-body"
+            >
+        
+            <img
+                src="avia.logo/avia-left-wing.png"
+                alt=""
+                class="avia-logo-left-wing"
+            >
+        
+            <img
+                src="avia.logo/avia-right-wing.png"
+                alt=""
+                class="avia-logo-right-wing"
+            >
+        
+        </div>
+        <nav>
+            <a href="#" id="sidebar-dashboard">Dashboard</a><br>
+            <a href="#" id="sidebar-upload">Upload Textbook</a><br>
+            <a href="#" id="sidebar-flashcards">Generate Flashcards</a><br>
+            <a href="#" id="sidebar-quiz">Take Mock Quiz</a><br>
+            <a href="#" id="open-settings">Offline Settings</a><br>
+        </nav>
+    </aside>
+
+    <main>
+
+        <section id="student-setup">
+            <h2>Welcome to AviaClassroom 👋</h2>
+            <p>Enter your name to personalize your study experience.</p>
+        
+            <input
+                type="text"
+                id="student-name-input"
+                placeholder="Enter your name"
+                autocomplete="name"
+            >
+        
+            <button type="button" id="save-student-name">
+                Continue
+            </button>
+        </section>
+
+
+        <header id="dashboard-header">
+            <div>
+                <h2>Good evening, Ahmad 👋</h2>
+                <p>Ready to continue your study session?</p>
+            </div>
+            <!-- Login and Sign Up button for students who want an account -->
+            <button id="login-signup-button" type="button">
+             Login / Sign Up
+             </button>
+
+            <div id="dashboard-actions"> <button type="button" id="aviaChatButton">
+                <img src="logo.png" alt="AVIA" id="avia-logo-mark">
+                <span>Ask AVIA</span>
+            </button>
+        
+            <div id="student-profile">
+                <div id="profile-avatar">A</div>
+            
+                <div>
+                    <strong>Ahmad</strong>
+                    <span>Student</span>
+                </div>
+
+                <button type="button" id="edit-profile">
+                    Edit Profile
+                </button>
+            </div>
+
+        </div>
+
+        </header>
+
+        <section id="login-screen" style="display: none;">
+
+            <div class="login-screen-header">
+                <button type="button" id="login-back-dashboard">
+                    ← Back
+                </button>
+        
+                <div>
+                    <h2>Welcome to AVIA</h2>
+                    <p>Log in or create your student account.</p>
+                </div>
+            </div>
+        
+            <div class="login-card">
+        
+                <h3>Login / Sign Up</h3>
+        
+                <p>
+                    Create an account to keep your study progress,
+                    materials, quizzes, and flashcards synced.
+                </p>
+        
+                <button type="button" id="login-button">
+                    Log In
+                </button>
+        
+                <button type="button" id="signup-button">
+                    Create Account
+                </button>
+        
+                <!-- Login form -->
+                <div id="login-form" style="display: none;">
+        
+                    <h3>Log In</h3>
+        
+                    <input
+                        type="email"
+                        id="login-email"
+                        placeholder="Email address"
+                    >
+        
+                    <input
+                        type="password"
+                        id="login-password"
+                        placeholder="Password"
+                    >
+        
+                    <button type="button" id="submit-login">
+                        Log In
+                    </button>
+
+                    <button type="button" id="back-to-account-options">
+                        ← Choose another option
+                    </button>
+        
+                </div>
+        
+                <!-- Create account form -->
+                <div id="signup-form" style="display: none;">
+        
+                    <h3>Create Account</h3>
+        
+                    <input
+                        type="text"
+                        id="signup-name"
+                        placeholder="Full name"
+                    >
+        
+                    <input
+                        type="email"
+                        id="signup-email"
+                        placeholder="Email address"
+                    >
+        
+                    <input
+                        type="password"
+                        id="signup-password"
+                        placeholder="Password"
+                    >
+        
+                    <button type="button" id="submit-signup">
+                        Create Account
+                    </button>
+                    <button type="button" id="back-to-account-options-signup">
+                        ← Choose another option
+                    </button>
+        
+                </div>
+        
+            </div>
+        
+        </section>
+
+        <section id="uploads-section">
+
+            <div id="upload-heading">
+                <div>
+                    <h2>Upload Your Textbook</h2>
+                    <p>Upload a PDF or TXT file to start studying.</p>
+                </div>
+            </div>
+        
+            <label for="textbook" id="upload-box">
+                <strong>Drag & Drop Your Textbook Here</strong>
+                <span>or click to browse • PDF or TXT • Maximum 10MB</span>
+        
+                <input 
+                    type="file" 
+                    id="textbook" 
+                    name="textbook" 
+                    accept=".pdf,.txt"
+                >
+            </label>
+        
+            <div id="selected-file">
+                <span id="fileName">No textbook selected.</span>
+        
+                <button type="button" id="removeFile">
+                    Remove
+                </button>
+            </div>
+        
+        </section>
+
+    <!-- HISTORY SECTION -->
+    <section id="history">
+
+        <div id="history-heading">
+            <h3>Recent Study Materials</h3>
+            <button type="button" id="change-color">View All</button>
+        </div>
+    
+        <div id="materials-list">
+    
+        
+    
+        </div>
+    
+    </section>
+
+
+    <!-- ============================== -->
+<!-- STUDY MATERIALS LIBRARY -->
+<!-- ============================== -->
+
+<section id="materials-library">
+
+    <div id="materials-library-navigation">
+
+        <button
+            type="button"
+            id="materials-back-dashboard"
+        >
+            ← Back to Dashboard
+        </button>
+
+    </div>
+
+    <div id="materials-library-header">
+
+        <div>
+            <h2>Study Materials</h2>
+
+            <p>
+                All your uploaded textbooks and study files.
+            </p>
+        </div>
+
+    </div>
+
+    <div id="all-materials-list">
+
+        <!-- All saved materials will appear here -->
+
+    </div>
+
+</section>
+
+        <!-- QUIZ HISTORY -->
+
+        <section id="quiz-history">
+
+            <div id="quiz-history-navigation">
+        
+                <button type="button" id="history-back-dashboard">
+                    ← Back to Quiz
+                </button>
+        
+            </div>
+        
+            <div id="quiz-history-heading">
+        
+                <div>
+                    <h3>Quiz History</h3>
+                    <p>Track your previous quiz attempts.</p>
+                </div>
+        
+                <button type="button" id="clear-quiz-history">
+                    Clear History
+                </button>
+        
+            </div>
+        
+            <div id="quiz-history-list">
+        
+                <p id="no-quiz-history">
+                    No quiz attempts yet.
+                </p>
+        
+            </div>
+        
+        </section>
+
+        <section id="feature-cards">
+
+            <article>
+                <h3>Quick Summary</h3>
+                <p>Generate instant summaries of chapters.</p>
+                <button type="button" id="summarizeButton">Generate Summary</button>
+                <p id="summaryStatus"></p>
+            </article>
+
+            <article>
+                <h3>Flash Deck</h3>
+                <p>Create definition flashcards automatically.</p>
+                <button type="button" id="flashcardButton">Create Flashcards</button>
+                <p id="flashcardStatus"></p>
+            </article>
+
+            <article>
+                <h3>Mock Quiz</h3>
+                <p>Generate practice questions from the material.</p>
+                <button type="button" id="StartQuiz">Start Quiz</button>
+                <p id="quizStatus"></p>
+            </article>
+
+        </section>
+
+        <!-- Flashcard screen for displaying generated study flashcards -->
+<section id="flashcardScreen" class="flashcard-screen" style="display: none;">
+
+    <div class="flashcard-header">
+
+        <button
+            id="backFromFlashcards"
+            type="button"
+        >
+            ← Back
+        </button>
+
+        <div>
+
+            <h2>Flash Deck</h2>
+
+            <p id="flashcardMaterialName">
+                Study Material
+            </p>
+
+        </div>
+
+    </div>
+
+
+    <div class="flashcard-content">
+
+        <div
+            id="flashcardCard"
+            class="flashcard-card"
+        >
+
+            <div id="flashcardFront">
+
+                Your flashcard question will appear here.
+
+            </div>
+
+            <div
+                id="flashcardBack"
+                style="display: none;"
+            >
+
+                Your answer will appear here.
+
+            </div>
+
+        </div>
+
+
+        <button
+            id="flipFlashcard"
+            type="button"
+        >
+            Flip Card
+        </button>
+
+        <div class="flashcard-actions">
+            <button id="knowFlashcard" type="button">✓ I Know</button>
+            <button id="reviewFlashcard" type="button">× Review Again</button>
+        </div>
+
+
+        <div class="flashcard-navigation">
+
+            <button
+                id="previousFlashcard"
+                type="button"
+            >
+                ← Previous
+            </button>
+
+            <span id="flashcardCounter">
+                1 / 1
+            </span>
+
+            <button
+                id="nextFlashcard"
+                type="button"
+            >
+                Next →
+            </button>
+
+        </div>
+
+    </div>
+
+</section>
+
+        <!-- Summary screen for displaying generated study summaries -->
+<section
+id="summaryScreen"
+class="summary-screen"
+style="display: none;"
+>
+
+<div class="summary-header">
+
+    <button
+        id="backFromSummary"
+        type="button"
+    >
+        ← Back
+    </button>
+
+    <div>
+        <h2>Quick Summary</h2>
+
+        <p id="summaryMaterialName">
+            Study Material
+        </p>
+    </div>
+
+</div>
+
+
+
+<div class="summary-content">
+
+    <h3>Chapter Overview</h3>
+
+    <div id="summaryOverview">
+        Your generated summary will appear here.
+    </div>
+
+
+    <h3>Key Concepts</h3>
+
+    <ul id="summaryKeyConcepts">
+        <li>
+            Key concepts will appear here.
+        </li>
+    </ul>
+
+
+    <h3>Important Points</h3>
+
+    <ul id="summaryImportantPoints">
+        <li>
+            Important points will appear here.
+        </li>
+    </ul>
+
+
+    <h3>Accuracy Review</h3>
+
+    <p>
+        These are claims from your study material that may need
+        further verification. Review them with your textbook,
+        teacher, or a reliable reference.
+    </p>
+
+    <ul id="summaryAccuracyNotes">
+        <li>
+            Potential accuracy concerns will appear here.
+        </li>
+    </ul>
+
+</div>
+
+
+<div class="summary-actions">
+
+    <button
+        id="summaryDownloadButton"
+        type="button"
+    >
+        Download Summary
+    </button>
+
+    <button
+        id="summaryCreateFlashcards"
+        type="button"
+    >
+        Create Flashcards
+    </button>
+
+    <button
+        id="summaryTakeQuiz"
+        type="button"
+    >
+        Take Quiz
+    </button>
+
+</div>
+</section>
+            
+        
+<!-- AVIA CHAT SECTION -->
+
+<section id="avia-chat-section">
+
+    <div id="avia-chat-navigation">
+
+        <button type="button" id="avia-back-dashboard">
+            ← Back to Dashboard
+        </button>
+
+    </div>
+
+
+    <div id="avia-chat-header">
+
+        <div id="avia-chat-brand">
+    
+            <!-- ANIMATED AVIA LOGO -->
+    
+            <div class="avia-chat-animated-logo">
+    
+                <img
+                    src="avia.logo/avia-body.png"
+                    alt=""
+                    class="avia-logo-body"
+                >
+    
+                <img
+                    src="avia.logo/avia-left-wing.png"
+                    alt=""
+                    class="avia-logo-left-wing"
+                >
+    
+                <img
+                    src="avia.logo/avia-right-wing.png"
+                    alt=""
+                    class="avia-logo-right-wing"
+                >
+    
+            </div>
+    
+    
+            <!-- AVIA TITLE -->
+    
+            <div>
+    
+                <h2>Chat with AVIA</h2>
+    
+                <p>
+                    Your AI study assistant
+                </p>
+    
+            </div>
+    
+        </div>
+    
+    </div>
+
+    <div id="avia-chat-messages">
+
+        <div class="avia-message avia-message-ai">
+    
+            <div class="avia-message-avatar">
+    
+                <div class="avia-chat-animated-logo avia-message-logo">
+    
+                    <img
+                        src="avia.logo/avia-body.png"
+                        alt=""
+                        class="avia-logo-body"
+                    >
+    
+                    <img
+                        src="avia.logo/avia-left-wing.png"
+                        alt=""
+                        class="avia-logo-left-wing"
+                    >
+    
+                    <img
+                        src="avia.logo/avia-right-wing.png"
+                        alt=""
+                        class="avia-logo-right-wing"
+                    >
+    
+                </div>
+    
+            </div>
+    
+            <div class="avia-message-content">
+    
+                <strong>AVIA</strong>
+    
+                <p>
+                    Hi! 👋 I'm AVIA, your AI study assistant.
+                    Ask me anything about what you're studying.
+                </p>
+    
+            </div>
+    
+        </div>
+    
+    </div>
+    
+    
+    <div id="avia-chat-input-area">
+    
+        <textarea
+            id="avia-chat-input"
+            placeholder="Ask AVIA a question..."
+            rows="1"
+        ></textarea>
+    
+        <button
+            type="button"
+            id="avia-send-button"
+        >
+            Send
+        </button>
+    
+    </div>
+
+</section>
+        
+
+        <section id="quiz-section">
+
+            <div id="quiz-navigation">
+        
+                <button type="button" id="back-dashboard">
+                    ← Back to Dashboard
+                </button>
+        
+                <button type="button" id="open-quiz-history">
+                    Quiz History →
+                </button>
+        
+            </div>
+       
+            <div id="quiz-content">
+        
+                <h2>Mock Quiz</h2>
+        
+                <p id="question-number">
+                    Question 1 of 3
+                </p>
+        
+                <h3 id="question-text">
+                    What is the basic unit of life?
+                </h3>
+        
+                <div id="answer-options">
+                    <!-- JavaScript will create answers here -->
+                </div>
+        
+                <button type="button" id="next-question">
+                    Next Question
+                </button>
+        
+            </div>
+        
+        
+            <!-- QUIZ RESULT -->
+        
+            <div id="quiz-result">
+        
+                <div class="result-icon">
+                    🏆
+                </div>
+        
+                <h2>Quiz Complete!</h2>
+        
+                <p id="result-message">
+                    Great job! Here's your result.
+                </p>
+        
+                <div id="score-display">
+                    <strong id="final-score">0/3</strong>
+                    <span id="final-percentage">0%</span>
+                </div>
+        
+                <div id="result-stats">
+        
+                    <div>
+                        <strong id="correct-answers">0</strong>
+                        <span>Correct</span>
+                    </div>
+        
+                    <div>
+                        <strong id="wrong-answers">0</strong>
+                        <span>Wrong</span>
+                    </div>
+        
+                </div>
+        
+                <div id="result-buttons">
+
+                    <button type="button" id="try-again">
+                        Try Again
+                    </button>
+                
+                    <button type="button" id="result-dashboard">
+                        Back to Dashboard
+                    </button>
+                
+                    <button type="button" id="share-whatsapp">
+                        📲 Share Score
+                    </button>
+
+                    <button type="button" id="download-score-card">
+                        ⬇️ Download Score Card
+                    </button>
+
+                </div>
+
+
+                <!-- VISUAL SCORE CARD -->
+
+                <div id="score-card-preview">
+
+                    <canvas
+                        id="score-card-canvas"
+                        width="1200"
+                        height="630"
+                    ></canvas>
+
+                </div>
+
+
+                <div id="review-section">
+
+                    <h3>Review Your Answers</h3>
+                
+                    <div id="review-answers">
+                        <!-- JavaScript will add the answers here -->
+                    </div>
+                
+                </div>
+        
+            </div>
+        
+        </section>
+
+    <!-- SETTINGS SECTION-->
+    <section id="settings-section">
+
+        <div id="settings-navigation">
+    
+            <button type="button" id="settings-back-dashboard">
+                ← Back
+            </button>
+    
+        </div>
+    
+        <div id="settings-heading">
+    
+            <div>
+                <h3>Settings</h3>
+                <p>Customize your Avia Classroom experience.</p>
+            </div>
+    
+        </div>
+    
+        <div id="appearance-setting">
+    
+            <strong id="dark-mode-title">Dark Mode</strong>
+
+<p id="dark-mode-description">
+    Use a darker appearance for low-light environments.
+</p>
+            </div>
+    
+            <label>
+                <input type="checkbox" id="dark-mode-toggle">
+                <span>Enable</span>
+            </label>
+    
+        </div>
+    
+    </section>
+
+    <!-- AVIA account information popup -->
+<div id="account-info-modal" class="account-info-modal" style="display: none;">
+
+    <div class="account-info-card">
+
+        <button
+            type="button"
+            id="close-account-info"
+            class="account-info-close"
+        >
+            ×
+        </button>
+
+        <img
+            src="logo.png"
+            alt="AVIA"
+            class="account-info-logo"
+        >
+
+        <h3 id="account-info-title">
+            Account saved on this device
+        </h3>
+
+        <p id="account-info-message">
+            Your profile has been saved locally. Full account syncing
+            and cloud login will be available soon.
+        </p>
+
+        <button
+            type="button"
+            id="account-info-ok"
+            class="account-info-ok"
+        >
+            Continue
+        </button>
+
+    </div>
+
+</div>
+    
+    </main>
+    <script src="./node_modules/marked/lib/marked.umd.js"></script>
+    <script src="./node_modules/dompurify/dist/purify.min.js"></script>
+    <script src="./node_modules/jspdf/dist/jspdf.umd.min.js"></script>
+    <script src="./script.js"></script></body>
+</html>
+

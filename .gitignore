@@ -1,0 +1,20 @@
+.env
+.env.*
+!.env.example
+
+venv/
+backend/venv/
+
+__pycache__/
+*.py[cod]
+
+# Local frontend dependencies
+node_modules/
+
+# Local files
+.DS_Store
+temp.pdf
+
+# Python cache files
+__pycache__/
+*.py[cod]
