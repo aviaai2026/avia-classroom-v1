@@ -2600,7 +2600,7 @@ shareWhatsapp.addEventListener("click", function() {
 
     const percentage = Math.round((score / totalQuestions) * 100);
 
-    const classroomLink = "https://YOUR-AVIA-CLASSROOM-LINK-HERE";
+    const classroomLink = "https://avia-classroom-v1.vercel.app/";
 
     const message =
         "🎓 " + name + " just completed a quiz on AVIA Classroom!\n\n" +
@@ -2609,10 +2609,10 @@ shareWhatsapp.addEventListener("click", function() {
         "I'm improving my learning with AVIA Classroom!\n\n" +
         "Try AVIA Classroom: " + classroomLink;
 
-    const whatsappURL =
+        const whatsappURL =
         "https://wa.me/?text=" + encodeURIComponent(message);
-
-    window.open(whatsappURL, "_blank", "noopener,noreferrer");
+    
+    window.location.href = whatsappURL;
 });
 // ==============================
 // DOWNLOAD SCORE CARD
