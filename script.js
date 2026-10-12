@@ -2670,84 +2670,95 @@ downloadScoreCard.addEventListener(
 // TEXTBOOK SELECTION
 // ==============================
 
-textbook.addEventListener(
-    "change",
-    async function() {
 
-        console.log(
-            "Textbook selected!"
+textbook.addEventListener("change", async function () {
+    if (!textbook.files || textbook.files.length === 0) {
+        fileName.textContent = "No textbook selected.";
+        return;
+    }
+
+    // Capture this file before awaiting network or database work.
+    const selectedFile = textbook.files[0];
+    
+    // Do not let study actions run before extraction is complete.
+    setMaterialProcessing(true);
+    fileName.textContent = `Preparing ${selectedFile.name}...`;
+summaryStatus.textContent = "Preparing your textbook. Summary will be available shortly.";
+flashcardStatus.textContent = "Preparing your textbook. Flashcards will be available shortly.";
+quizStatus.textContent = "Preparing your textbook. Your quiz will be available shortly.";
+
+    const materialId = saveMaterialToHistory(selectedFile);
+    selectedMaterialId = materialId;
+
+    try {
+        fileName.textContent = `Preparing ${selectedFile.name}...`;
+
+        const formData = new FormData();
+        formData.append("file", selectedFile);
+
+        const response = await fetch(
+            "https://avia-classroom-v1.onrender.com/materials/upload",
+            {
+                method: "POST",
+                body: formData
+            }
         );
 
-        if (
-            textbook.files.length > 0
-        ) {
-
-            let selectedFile =
-                textbook.files[0];
-
-            fileName.textContent =
-                selectedFile.name;
-
-            // Save material locally
-            let materialId =
-    saveMaterialToHistory(
-        selectedFile
-    );
-    selectedMaterialId = materialId;
-            // Send the actual file to FastAPI
-            try {
-
-                const formData =
-                    new FormData();
-
-                formData.append(
-                    "file",
-                    selectedFile
-                );
-
-                const response =
-                    await fetch(
-                        "https://avia-classroom-v1.onrender.com/materials/upload",
-                        {
-                            method: "POST",
-                            body: formData
-                        }
-                    );
-
-                const data =
-                    await response.json();
-
-                console.log(
-                    "Material processed by AVIA:",
-                    data
-                );
-
-                await saveExtractedTextToDatabase(materialId, data.text);
-
-const savedText =
-    await getExtractedTextFromDatabase(materialId);
-
-console.log("Extracted textbook text is ready:", savedText.length, "characters");
-            
-
-            } catch (error) {
-
-                console.error(
-                    "Could not process material:",
-                    error
-                );
-
-            }
-
-        } else {
-
-            fileName.textContent =
-                "No textbook selected.";
-
+        let data;
+        try {
+            data = await response.json();
+        } catch {
+            throw new Error("AVIA returned an unreadable upload response. Please try again.");
         }
 
+        if (!response.ok) {
+            throw new Error(
+                data.detail || "AVIA could not process this textbook. Please try again."
+            );
+        }
+
+        if (typeof data.text !== "string" || data.text.trim().length < 100) {
+            throw new Error(
+                "AVIA could not extract enough readable text from this textbook. Try another file."
+            );
+        }
+
+        await saveExtractedTextToDatabase(materialId, data.text);
+
+        const savedText = await getExtractedTextFromDatabase(materialId);
+
+        if (typeof savedText !== "string" || savedText.trim().length < 100) {
+            throw new Error(
+                "The extracted text could not be verified in local storage. Please upload again."
+            );
+        }
+
+        console.log(
+            "Extracted textbook text is ready:",
+            savedText.length,
+            "characters"
+        );
+
+        fileName.textContent = selectedFile.name;
+
+summaryStatus.textContent = "Your textbook is ready. You can now generate a summary.";
+flashcardStatus.textContent = "Your textbook is ready. You can now create flashcards.";
+quizStatus.textContent = "Your textbook is ready. You can now start a quiz.";
+    } catch (error) {
+        console.error("Could not process material:", error);
+    
+        const errorMessage =
+            error.message || "Could not process this textbook. Please try again.";
+    
+        fileName.textContent = errorMessage;
+        summaryStatus.textContent = "Textbook processing failed. Please upload it again.";
+        flashcardStatus.textContent = "Textbook processing failed. Please upload it again.";
+        quizStatus.textContent = "Textbook processing failed. Please upload it again.";
+    } finally {
+        // Always unlock the study actions, even if extraction fails.
+        setMaterialProcessing(false);
     }
-);
+});
 // ==============================
 // SAVE MATERIAL TO HISTORY
 // ==============================
