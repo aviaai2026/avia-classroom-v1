@@ -741,7 +741,6 @@ let summaryImportantPoints =
 
     document.querySelector("#summaryImportantPoints");
 
-    let summaryAccuracyNotes = document.getElementById("summaryAccuracyNotes");
 // GET FLASH CARDS ELEMENT 
 let flashcardScreen =
     document.querySelector(
@@ -1180,38 +1179,6 @@ function displaySummaryData(data, materialName) {
             summaryImportantPoints.appendChild(item);
         });
 
-    summaryAccuracyNotes.innerHTML = "";
-
-    (Array.isArray(data.accuracy_notes) ? data.accuracy_notes : [])
-        .forEach(function(note) {
-            const item = document.createElement("li");
-
-            [
-                ["Claim: ", note.claim || "Claim not provided."],
-                ["Concern: ", note.concern || "No concern details provided."],
-                [
-                    "Suggested check: ",
-                    note.suggested_check || "Check a reliable reference."
-                ]
-            ].forEach(function(entry) {
-                const paragraph = document.createElement("p");
-                const label = document.createElement("strong");
-
-                label.textContent = entry[0];
-                paragraph.appendChild(label);
-                paragraph.appendChild(document.createTextNode(entry[1]));
-                item.appendChild(paragraph);
-            });
-
-            summaryAccuracyNotes.appendChild(item);
-        });
-
-    if (!summaryAccuracyNotes.children.length) {
-        const item = document.createElement("li");
-        item.textContent =
-            "No potential accuracy concerns were identified. This does not guarantee that every claim is correct.";
-        summaryAccuracyNotes.appendChild(item);
-    }
 
     if (!summaryKeyConcepts.children.length) {
         summaryKeyConcepts.textContent =
@@ -1418,11 +1385,6 @@ summaryDownloadButton.addEventListener("click", function() {
         11
     );
 
-    addSectionHeading("Accuracy Review");
-    addWrappedText(
-        summaryAccuracyNotes.innerText.trim(),
-        11
-    );
 
     const safeFileName = currentSummaryMaterialName
         .replace(/\.[^/.]+$/, "")

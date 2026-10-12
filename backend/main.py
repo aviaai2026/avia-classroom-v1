@@ -1,3 +1,4 @@
+import time
 from datetime import datetime, timedelta, timezone
 import json
 import os
@@ -163,7 +164,6 @@ def empty_summary(message, summary_message):
         "summary": summary_message,
         "key_concepts": [],
         "important_points": [],
-        "accuracy_notes": [],
     }
 
 
@@ -269,7 +269,13 @@ async def upload_material(file: UploadFile = File(...)):
         )
 
     try:
+        upload_started = time.perf_counter()
         content = await file.read(MAX_UPLOAD_SIZE + 1)
+
+        print(
+            f"UPLOAD_READ_SECONDS="
+            f"{time.perf_counter() - upload_started:.2f}"
+        )
 
         if len(content) > MAX_UPLOAD_SIZE:
             raise HTTPException(
@@ -291,12 +297,16 @@ async def upload_material(file: UploadFile = File(...)):
                     status_code=400,
                     detail="The text file must use UTF-8 encoding.",
                 )
-
         else:
-            # Read the PDF directly from memory instead of writing to temp.pdf
             from io import BytesIO
 
+            pdf_started = time.perf_counter()
             reader = PdfReader(BytesIO(content))
+
+            print(
+                f"PDF_OPEN_SECONDS="
+                f"{time.perf_counter() - pdf_started:.2f}"
+            )
 
             if reader.is_encrypted:
                 raise HTTPException(
@@ -305,6 +315,7 @@ async def upload_material(file: UploadFile = File(...)):
                 )
 
             pages = []
+            extraction_started = time.perf_counter()
 
             for page in reader.pages:
                 page_text = page.extract_text()
@@ -313,13 +324,17 @@ async def upload_material(file: UploadFile = File(...)):
 
             text = "\n".join(pages)
 
+            print(
+                f"PDF_EXTRACT_SECONDS="
+                f"{time.perf_counter() - extraction_started:.2f}; "
+                f"PAGES={len(reader.pages)}; "
+                f"CHARACTERS={len(text)}"
+            )
+
         if not text.strip():
             raise HTTPException(
                 status_code=400,
-                detail=(
-                    "No readable text was found. "
-                    "The PDF may contain scanned images."
-                ),
+                detail="No readable text was found in the file.",
             )
 
         return {
@@ -329,31 +344,14 @@ async def upload_material(file: UploadFile = File(...)):
 
     except HTTPException:
         raise
-
     except Exception:
         print("Material upload failed. Check the backend logs.")
         raise HTTPException(
             status_code=400,
             detail="The file could not be read. Please try another file.",
         )
-
     finally:
         await file.close()
-
-
-# Validate the accuracy review generated alongside the summary
-def validate_accuracy_notes(notes):
-    if not isinstance(notes, list):
-        raise ValueError("Invalid accuracy notes format.")
-
-    for note in notes:
-        if not isinstance(note, dict):
-            raise ValueError("Invalid accuracy note.")
-
-        for field in ("claim", "concern", "suggested_check"):
-            if not isinstance(note.get(field), str):
-                raise ValueError("Invalid accuracy note field.")
-
 
 # Generate revision notes and potential accuracy warnings in one AI request
 @app.post("/summarize")
@@ -400,8 +398,8 @@ You are AVIA, a precise revision assistant for secondary-school students.
 Create concise, exam-focused revision notes from the supplied study material.
 Preserve the important syllabus content and make the notes easy to revise.
 
-Return valid JSON only, with exactly these four fields:
-summary, key_concepts, important_points, accuracy_notes.
+Return valid JSON only, with exactly these three fields:
+summary, key_concepts, important_points.
 
 Use this structure:
 {
@@ -409,14 +407,7 @@ Use this structure:
   "key_concepts": [
     {"term": "Term", "explanation": "Short, accurate definition"}
   ],
-  "important_points": ["Short exam fact"],
-  "accuracy_notes": [
-    {
-      "claim": "Original claim from the source",
-      "concern": "Why it may be inaccurate or misleading",
-      "suggested_check": "What the student should verify"
-    }
-  ]
+  "important_points": ["Short exam fact"]
 }
 
 SUMMARY
@@ -439,21 +430,6 @@ IMPORTANT POINTS
 - Prioritise figures, comparisons, sequences and testable facts.
 - Do not simply repeat the summary or key-concept definitions.
 
-ACCURACY REVIEW
-- Review the supplied material for specific claims that may be inaccurate,
-  contradictory, outdated or misleading.
-- Use established knowledge carefully to identify potential concerns.
-- Preserve the textbook's intended content in the summary. Never silently
-  replace a textbook claim with a different answer.
-- In each accuracy_notes item, identify the source claim, explain the concern
-  briefly, and suggest what should be checked.
-- Do not invent errors or flag a claim merely because it lacks detail.
-- Distinguish a definite contradiction from a possible error.
-- Do not claim independent verification or cite a source you did not consult.
-- If no meaningful concerns are identified, return an empty accuracy_notes array.
-- If the evidence is insufficient, state that the claim needs verification.
-- Accuracy notes are warnings, not guaranteed fact-checks.
-
 SOURCE FIDELITY
 - Treat the supplied material as the primary source for the syllabus.
 - Preserve important qualifications, definitions and classifications.
@@ -465,9 +441,7 @@ OUTPUT REQUIREMENTS
 - summary must be a string containing Markdown.
 - key_concepts must be a list of objects with string fields term and explanation.
 - important_points must be a list of strings.
-- accuracy_notes must be a list of objects with string fields claim,
-  concern and suggested_check.
-- Return all four fields even when any list is empty.
+- Return all three fields even when any list is empty.
 - Return valid JSON only, without code fences or commentary.
 """
 
@@ -484,7 +458,6 @@ OUTPUT REQUIREMENTS
         summary_text = result.get("summary", "")
         key_concepts = result.get("key_concepts", [])
         important_points = result.get("important_points", [])
-        accuracy_notes = result.get("accuracy_notes", [])
 
         if not isinstance(summary_text, str):
             raise ValueError("Invalid summary format.")
@@ -508,14 +481,13 @@ OUTPUT REQUIREMENTS
         if not all(isinstance(point, str) for point in important_points):
             raise ValueError("Invalid important point.")
 
-        validate_accuracy_notes(accuracy_notes)
+
 
         # Store the validated result for reuse by other students.
         summary_data = {
             "summary": summary_text,
             "key_concepts": key_concepts,
             "important_points": important_points,
-            "accuracy_notes": accuracy_notes,
         }
 
                 # Save generated results only when shared caching is enabled.
