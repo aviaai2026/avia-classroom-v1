@@ -688,6 +688,9 @@ let flashcardButton =
 let button =
     document.querySelector("#StartQuiz");
 
+// Stores the textbook title used for the active quiz and its score card.
+let currentQuizTitle = "Study Material";
+
 let textbook =
     document.querySelector("#textbook");
 
@@ -1035,6 +1038,14 @@ flashcardButton.addEventListener("click", async function () {
     }
 
     const selectedFile = textbook.files[0];
+
+    // Keep the uploaded textbook's name for the quiz result and score card.
+    // Keep the uploaded PDF or text filename available for the score card.
+    currentQuizTitle =
+    selectedFile.name.replace(/\.[^/.]+$/, "") ||
+    fileName.textContent.trim() ||
+    selectedFile.name;
+    
     const materialId = findMaterialIdByName(selectedFile.name);
 
     if (!materialId) {
@@ -2118,11 +2129,18 @@ function generateScoreCard(result = null) {
     ctx.font =
         "bold 34px Arial";
 
-    ctx.fillText(
-        "BIOLOGY QUIZ",
-        70,
-        155
-    );
+// Prefer the saved textbook title, then the active upload's filename.
+// Use the exact filename for a new quiz, or the saved title for a history download.
+const quizTitle = result
+    ? (result.subject || currentQuizTitle)
+    : currentQuizTitle;
+
+ctx.fillText(
+quizTitle.toUpperCase(),
+70,
+155,
+scoreCardCanvas.width - 140
+);
 
     ctx.fillStyle =
         "white";
@@ -2262,8 +2280,8 @@ function saveQuizHistory() {
         name:
             name,
 
-        subject:
-            "Biology",
+            subject:
+            currentQuizTitle,
 
         score:
             score,
@@ -2641,6 +2659,8 @@ textbook.addEventListener("change", async function () {
 
     // Capture this file before awaiting network or database work.
     const selectedFile = textbook.files[0];
+    // Preserve the exact uploaded filename for the quiz and its score card.
+currentQuizTitle = selectedFile.name;
     
     // Do not let study actions run before extraction is complete.
     setMaterialProcessing(true);

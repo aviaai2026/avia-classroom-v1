@@ -1,28 +1,41 @@
-import time
-from datetime import datetime, timedelta, timezone
+import hashlib
 import json
 import os
+import time
+from datetime import datetime, timedelta, timezone
+from io import BytesIO
 from pathlib import Path
 
+import psycopg
 from dotenv import load_dotenv
-from fastapi import FastAPI, UploadFile, File, HTTPException, Request
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from openai import OpenAI
-from pypdf import PdfReader
-import hashlib
-import psycopg
 from psycopg.types.json import Jsonb
+from pypdf import PdfReader
 
-# Load environment variables for secure API configuration
+from backend.nltk_prototype import clean_text
+
+
+# Load environment variables without exposing secrets.
 load_dotenv()
 
-# Create the OpenAI client only when an API key is available
+# Create the AI client only when an API key is available.
 api_key = os.getenv("OPENAI_API_KEY")
 client = OpenAI(api_key=api_key) if api_key else None
 
 app = FastAPI()
 
-# Creates the shared cache table if it does not already exist.
+PROJECT_DIR = Path(__file__).resolve().parent.parent
+MAX_UPLOAD_SIZE = 10 * 1024 * 1024
+SHARED_CACHE_ENABLED = True
+
+# Temporary daily usage tracking by browser ID.
+# This resets at UTC midnight or when the backend restarts.
+daily_usage = {}
+
+
+# Create the shared PostgreSQL cache table when explicitly requested.
 def ensure_study_cache_table():
     database_url = os.getenv("DATABASE_URL")
 
@@ -30,18 +43,20 @@ def ensure_study_cache_table():
         raise RuntimeError("DATABASE_URL is not configured.")
 
     with psycopg.connect(database_url) as connection:
-        connection.execute("""
+        connection.execute(
+            """
             CREATE TABLE IF NOT EXISTS study_content_cache (
                 cache_key TEXT PRIMARY KEY,
                 feature TEXT NOT NULL,
                 result JSONB NOT NULL,
                 created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
             )
-        """)
+            """
+        )
 
 
-# Creates a unique cache key from the complete extracted textbook text.
-# Change the version whenever the AI prompt or output format changes.
+# Create a cache key from the complete normalized study material.
+# Increment the prompt version when prompts or output formats change.
 def build_study_cache_key(feature: str, material_text: str) -> str:
     normalized_text = " ".join(material_text.split())
 
@@ -49,13 +64,16 @@ def build_study_cache_key(feature: str, material_text: str) -> str:
         normalized_text.encode("utf-8")
     ).hexdigest()
 
-    cache_identity = f"gpt-5.4-mini:prompt-v2:{feature}:{content_hash}"
+    cache_identity = (
+        f"gpt-6-luna:prompt-v2:{feature}:{content_hash}"
+    )
 
     return hashlib.sha256(
         cache_identity.encode("utf-8")
     ).hexdigest()
 
-# Retrieves previously generated study content from PostgreSQL.
+
+# Retrieve previously generated study content from PostgreSQL.
 def get_cached_study_content(cache_key: str):
     database_url = os.getenv("DATABASE_URL")
 
@@ -75,7 +93,7 @@ def get_cached_study_content(cache_key: str):
     return row[0] if row else None
 
 
-# Saves generated study content so other students can reuse it.
+# Save generated study content for reuse by other students.
 def save_study_content(
     cache_key: str,
     feature: str,
@@ -96,32 +114,35 @@ def save_study_content(
             (cache_key, feature, Jsonb(result)),
         )
 
-# Allow requests only from the local Avia Classroom frontend.
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        "http://127.0.0.1:5500",
-        "https://avia-classroom-v1.vercel.app",
-        "https://avia-classroom-v1-1nwbp6g7e-aviaaitech-2455.vercel.app",
-    ],
-    allow_credentials=False,
-    allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["Content-Type", "Authorization", "X-Browser-ID"],
-)# Keep the existing project root for temporary PDF extraction
-PROJECT_DIR = Path(__file__).resolve().parent.parent
-# 10 MB maximum upload size# Shared caching stays disabled until a material is approved by the server.
-MAX_UPLOAD_SIZE = 10 * 1024 * 1024  
-SHARED_CACHE_ENABLED = True
+
+# Log API token counts without logging prompts, API keys, or student material.
+def log_api_usage(feature: str, response):
+    usage = getattr(response, "usage", None)
+
+    if usage is None:
+        print(
+            f"[AVIA_USAGE] feature={feature} "
+            "usage_unavailable=true"
+        )
+        return
+
+    print(
+        f"[AVIA_USAGE] feature={feature} "
+        f"input_tokens={usage.input_tokens} "
+        f"output_tokens={usage.output_tokens} "
+        f"total_tokens={usage.total_tokens}"
+    )
 
 
-# Temporary daily usage tracking by browser ID.
-# Data resets at UTC midnight or when the backend restarts.
-daily_usage = {}
-
-
-# Checks and records daily AI usage for the requesting browser.
-def consume_daily_limit(request: Request, feature: str, limit: int):
-    browser_id = request.headers.get("X-Browser-ID", "").strip()
+# Enforce daily AI usage limits for each browser ID.
+def consume_daily_limit(
+    request: Request,
+    feature: str,
+    limit: int,
+):
+    browser_id = request.headers.get(
+        "X-Browser-ID", ""
+    ).strip()
 
     if not browser_id or len(browser_id) > 100:
         raise HTTPException(
@@ -141,23 +162,32 @@ def consume_daily_limit(request: Request, feature: str, limit: int):
 
     if used >= limit:
         tomorrow = now.date() + timedelta(days=1)
+
         reset_time = datetime.combine(
             tomorrow,
             datetime.min.time(),
             tzinfo=timezone.utc,
         )
-        retry_after = max(1, int((reset_time - now).total_seconds()))
+
+        retry_after = max(
+            1,
+            int((reset_time - now).total_seconds()),
+        )
 
         raise HTTPException(
             status_code=429,
-            detail=f"Daily limit reached for {feature}. Please try again tomorrow.",
+            detail=(
+                f"Daily limit reached for {feature}. "
+                "Please try again tomorrow."
+            ),
             headers={"Retry-After": str(retry_after)},
         )
 
     usage["counts"][feature] = used + 1
     daily_usage[browser_id] = usage
 
-# Return a consistent empty summary response for validation and error cases
+
+# Return a consistent empty summary response for validation and error cases.
 def empty_summary(message, summary_message):
     return {
         "message": message,
@@ -167,13 +197,30 @@ def empty_summary(message, summary_message):
     }
 
 
+# Allow requests from the configured Avia Classroom frontend origins.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://127.0.0.1:5500",
+        "https://avia-classroom-v1.vercel.app",
+        "https://avia-classroom-v1-1nwbp6g7e-aviaaitech-2455.vercel.app",
+    ],
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=[
+        "Content-Type",
+        "Authorization",
+        "X-Browser-ID",
+    ],
+)
+
+
 @app.get("/")
 def home():
     return {"message": "AVIA backend is running"}
 
 
-# Send the student's message to OpenAI and return AVIA's real response
-
+# Send the student's message to OpenAI and return AVIA's response.
 @app.post("/chat")
 def chat(message: dict, request: Request):
     user_message = message.get("message", "")
@@ -182,18 +229,21 @@ def chat(message: dict, request: Request):
         return {"reply": "Please enter a message first."}
 
     if client is None:
-        return {"reply": "AVIA's AI connection is not configured yet."}
+        return {
+            "reply": "AVIA's AI connection is not configured yet."
+        }
 
-    # Keep the existing daily usage limit.
     consume_daily_limit(request, "chat", 10)
 
     try:
-        # Accept only user and assistant messages from the conversation history.
+        # Accept only user and assistant messages from conversation history.
         raw_history = message.get("history", [])
+
         if not isinstance(raw_history, list):
             raw_history = []
 
         history = []
+
         for item in raw_history[-12:]:
             if not isinstance(item, dict):
                 continue
@@ -212,8 +262,9 @@ def chat(message: dict, request: Request):
                 "content": content.strip()[:4000],
             })
 
-        # Ensure the current question is included exactly once at the end.
+        # Ensure the current question appears once at the end.
         current_question = user_message.strip()[:4000]
+
         if (
             not history
             or history[-1]["role"] != "user"
@@ -224,28 +275,34 @@ def chat(message: dict, request: Request):
                 "content": current_question,
             })
 
-        # The instructions are controlled by the server, not the browser.
         response = client.responses.create(
-            model="gpt-5.4-mini",
+            model="gpt-6-luna",
             instructions=(
                 "You are AVIA, a helpful and friendly study assistant. "
                 "Explain concepts clearly for students. "
                 "Stay focused on education and learning. "
-                "Use the conversation history to understand follow-up questions. "
-                "If the student says 'it', 'they', 'its types', or similar, "
-                "use the relevant earlier conversation to identify the topic."
+                "Use conversation history for follow-up questions. "
+                "Resolve references such as 'it', 'they', and "
+                "'its types' using the relevant earlier conversation."
             ),
             input=history,
         )
 
+        log_api_usage("chat", response)
+
         return {"reply": response.output_text}
 
-    except Exception:
-        print("AVIA chat request failed. Check the backend logs.")
+    except Exception as error:
+        print(
+            f"AVIA chat request failed: {type(error).__name__}"
+        )
+
         return {
-            "reply": "Sorry, AVIA couldn't respond right now. Please try again."
+            "reply": (
+                "Sorry, AVIA couldn't respond right now. "
+                "Please try again."
+            )
         }
-       
 
 
 @app.post("/materials")
@@ -256,7 +313,7 @@ def add_material(material: dict):
     }
 
 
-# Extract readable text from supported uploaded study materials
+# Extract readable text from supported uploaded study materials.
 @app.post("/materials/upload")
 async def upload_material(file: UploadFile = File(...)):
     filename = file.filename or ""
@@ -280,7 +337,7 @@ async def upload_material(file: UploadFile = File(...)):
         if len(content) > MAX_UPLOAD_SIZE:
             raise HTTPException(
                 status_code=413,
-                detail="The file exceeds the 50 MB upload limit.",
+                detail="The file exceeds the 10 MB upload limit.",
             )
 
         if not content:
@@ -298,8 +355,6 @@ async def upload_material(file: UploadFile = File(...)):
                     detail="The text file must use UTF-8 encoding.",
                 )
         else:
-            from io import BytesIO
-
             pdf_started = time.perf_counter()
             reader = PdfReader(BytesIO(content))
 
@@ -319,6 +374,7 @@ async def upload_material(file: UploadFile = File(...)):
 
             for page in reader.pages:
                 page_text = page.extract_text()
+
                 if page_text:
                     pages.append(page_text)
 
@@ -344,24 +400,42 @@ async def upload_material(file: UploadFile = File(...)):
 
     except HTTPException:
         raise
-    except Exception:
-        print("Material upload failed. Check the backend logs.")
+
+    except Exception as error:
+        print(
+            f"Material upload failed: {type(error).__name__}"
+        )
+
         raise HTTPException(
             status_code=400,
-            detail="The file could not be read. Please try another file.",
+            detail=(
+                "The file could not be read. "
+                "Please try another file."
+            ),
         )
+
     finally:
         await file.close()
 
-# Generate revision notes and potential accuracy warnings in one AI request
+
+# Generate exam-focused revision notes from the uploaded study material.
 @app.post("/summarize")
 def summarize_material(material: dict, request: Request):
     material_text = material.get("text", "")
 
-    # Validate the uploaded study material
+    # Validate the material before sending it to the local text cleaner.
     if not isinstance(material_text, str) or not material_text.strip():
         return empty_summary(
             "No study material was provided.",
+            "Please upload study material containing readable text.",
+        )
+
+    # Clean extracted textbook text before cache lookup and AI processing.
+    material_text = clean_text(material_text)
+
+    if not material_text.strip():
+        return empty_summary(
+            "No readable study material remains after cleaning.",
             "Please upload study material containing readable text.",
         )
 
@@ -371,8 +445,9 @@ def summarize_material(material: dict, request: Request):
             "AVIA's AI connection is not configured yet.",
         )
 
-        # Build the key, but read shared results only when sharing is enabled.
+    # Build the key from the cleaned text to allow reuse of equivalent content.
     cache_key = build_study_cache_key("summary", material_text)
+
     cached_result = None
 
     if SHARED_CACHE_ENABLED:
@@ -381,7 +456,7 @@ def summarize_material(material: dict, request: Request):
         except Exception as error:
             print(
                 f"Summary cache lookup failed: "
-                f"{type(error).__name__}: {error}"
+                f"{type(error).__name__}"
             )
 
     if cached_result is not None:
@@ -396,7 +471,7 @@ def summarize_material(material: dict, request: Request):
 You are AVIA, a precise revision assistant for secondary-school students.
 
 Create concise, exam-focused revision notes from the supplied study material.
-Preserve the important syllabus content and make the notes easy to revise.
+Preserve important syllabus content and make the notes easy to revise.
 
 Return valid JSON only, with exactly these three fields:
 summary, key_concepts, important_points.
@@ -447,14 +522,20 @@ OUTPUT REQUIREMENTS
 
     try:
         response = client.responses.create(
-            model="gpt-5.4-mini",
+            model="gpt-6-luna",
             instructions=instructions,
             input=material_text,
         )
 
+        # Log actual API token usage without logging student material.
+        log_api_usage("summary", response)
+
         result = json.loads(response.output_text)
 
-        # Read and validate every field returned by the model
+        # Validate every field returned by the model.
+        if not isinstance(result, dict):
+            raise ValueError("Invalid summary response.")
+
         summary_text = result.get("summary", "")
         key_concepts = result.get("key_concepts", [])
         important_points = result.get("important_points", [])
@@ -481,16 +562,13 @@ OUTPUT REQUIREMENTS
         if not all(isinstance(point, str) for point in important_points):
             raise ValueError("Invalid important point.")
 
-
-
-        # Store the validated result for reuse by other students.
+        # Save generated results only when shared caching is enabled.
         summary_data = {
             "summary": summary_text,
             "key_concepts": key_concepts,
             "important_points": important_points,
         }
 
-                # Save generated results only when shared caching is enabled.
         if SHARED_CACHE_ENABLED:
             try:
                 save_study_content(
@@ -499,22 +577,28 @@ OUTPUT REQUIREMENTS
                     summary_data,
                 )
             except Exception as error:
-             print(f"Summary generation failed: {type(error).__name__}: {error}")
+                print(
+                    f"Summary cache save failed: "
+                    f"{type(error).__name__}"
+                )
+
         return {
             "message": "Summary generated successfully.",
             **summary_data,
         }
-    except Exception:
-        print("Summary generation failed. Check the backend logs.")
+
+    except Exception as error:
+        print(
+            f"Summary generation failed: {type(error).__name__}"
+        )
+
         return empty_summary(
             "Summary generation failed.",
             "AVIA couldn't generate your summary right now. Please try again.",
         )
 
 
-
-
-# Generate useful, varied flashcards from the actual study material
+# Generate useful revision flashcards from the uploaded study material.
 @app.post("/flashcards")
 def generate_flashcards(material: dict, request: Request):
     material_text = material.get("text", "")
@@ -532,21 +616,25 @@ def generate_flashcards(material: dict, request: Request):
             detail="Flashcard generation is temporarily unavailable.",
         )
 
-     # Match the complete textbook text, not only the AI input excerpt.
-    material_for_ai = material_text[:30000]
-    cache_key = build_study_cache_key("flashcards",  material_text)
+    # Preserve the original text for cache identity and reporting.
+    cache_key = build_study_cache_key("flashcards", material_text)
 
-        # Read shared cards only when sharing is enabled.
+    # Clean locally before limiting the text sent to the AI.
+    cleaned_material = clean_text(material_text)
+    material_for_ai = cleaned_material[:30000]
+
     cached_result = None
 
+    # Read shared cards only when sharing is enabled.
     if SHARED_CACHE_ENABLED:
         try:
             cached_result = get_cached_study_content(cache_key)
         except Exception as error:
             print(
                 f"Flashcard cache lookup failed: "
-                f"{type(error).__name__}: {error}"
+                f"{type(error).__name__}"
             )
+
     if cached_result is not None:
         return {
             "message": "Flashcards loaded from shared cache.",
@@ -592,7 +680,7 @@ Return valid JSON only, using this exact structure:
 
     try:
         response = client.responses.create(
-            model="gpt-5.4-mini",
+            model="gpt-6-luna",
             instructions=instructions,
             input=(
                 "Create revision flashcards from the following "
@@ -600,7 +688,13 @@ Return valid JSON only, using this exact structure:
             ),
         )
 
+        log_api_usage("flashcards", response)
+
         result = json.loads(response.output_text)
+
+        if not isinstance(result, dict):
+            raise ValueError("Invalid flashcard response.")
+
         generated_cards = result.get("flashcards", [])
 
         if not isinstance(generated_cards, list):
@@ -636,7 +730,7 @@ Return valid JSON only, using this exact structure:
             if len(flashcards) >= 5:
                 break
 
-                # Save generated cards only when shared caching is enabled.
+        # Save the complete validated result after card generation finishes.
         if SHARED_CACHE_ENABLED:
             try:
                 save_study_content(
@@ -644,8 +738,11 @@ Return valid JSON only, using this exact structure:
                     "flashcards",
                     {"flashcards": flashcards},
                 )
-            except Exception:
-                print("Flashcard cache save failed. Check backend logs.")
+            except Exception as error:
+                print(
+                    f"Flashcard cache save failed: "
+                    f"{type(error).__name__}"
+                )
 
         return {
             "message": "Flashcards generated successfully.",
@@ -656,51 +753,63 @@ Return valid JSON only, using this exact structure:
     except (json.JSONDecodeError, ValueError):
         raise HTTPException(
             status_code=502,
-            detail="AVIA could not format the flashcards correctly. Please try again.",
+            detail=(
+                "AVIA could not format the flashcards correctly. "
+                "Please try again."
+            ),
         )
 
     except Exception as error:
-     print(f"Flashcard generation failed: {type(error).__name__}: {error}")
-    raise HTTPException(
-        status_code=502,
-        detail="Flashcard generation failed. Please try again.",
-    )
+        print(
+            f"Flashcard generation failed: {type(error).__name__}"
+        )
+
+        raise HTTPException(
+            status_code=502,
+            detail="Flashcard generation failed. Please try again.",
+        )
 
 
-# Generate a multiple-choice quiz from the student's uploaded study material.
+# Generate a multiple-choice quiz from the student's study material.
 @app.post("/quiz")
 async def generate_quiz(payload: dict, request: Request):
     material_text = payload.get("text", "")
 
-
-    if not isinstance(material_text, str) or len(material_text.strip()) < 100:
+    if (
+        not isinstance(material_text, str)
+        or len(material_text.strip()) < 100
+    ):
         raise HTTPException(
             status_code=400,
-            detail="Please provide enough extracted study material to generate a quiz."
+            detail=(
+                "Please provide enough extracted study material "
+                "to generate a quiz."
+            ),
         )
 
     if client is None:
         raise HTTPException(
             status_code=503,
-            detail="AI service is not configured."
+            detail="AI service is not configured.",
         )
-    
-    # Keep the complete text for cache matching.
+
+    # Preserve the original text for cache identity.
     full_material_text = material_text
-
-    # Limit only the text sent to the AI.
-    material_for_ai = full_material_text[:30000]
-
-    # Match against the complete extracted textbook text.
     cache_key = build_study_cache_key("quiz", full_material_text)
-       # Read shared quizzes only when sharing is enabled.
+
+    # Clean locally before limiting the text sent to the AI.
+    cleaned_material = clean_text(full_material_text)
+    material_for_ai = cleaned_material[:30000]
+
     cached_result = None
 
     if SHARED_CACHE_ENABLED:
         try:
             cached_result = get_cached_study_content(cache_key)
-        except Exception:
-            print("Quiz cache lookup failed. Check backend logs.")
+        except Exception as error:
+            print(
+                f"Quiz cache lookup failed: {type(error).__name__}"
+            )
 
     if cached_result is not None:
         return {
@@ -712,7 +821,7 @@ async def generate_quiz(payload: dict, request: Request):
 
     try:
         response = client.responses.create(
-            model="gpt-5.4-mini",
+            model="gpt-6-luna",
             instructions=(
                 "Create exactly 5 educational multiple-choice questions "
                 "based only on the supplied study material. Each question "
@@ -727,13 +836,22 @@ async def generate_quiz(payload: dict, request: Request):
             input=material_for_ai,
         )
 
+        log_api_usage("quiz", response)
+
         result = json.loads(response.output_text)
+
+        if not isinstance(result, dict):
+            raise ValueError("Invalid quiz response.")
+
         generated_questions = result.get("questions")
 
-        # Validate the AI output before exposing it to the frontend.
-        if not isinstance(generated_questions, list) or len(generated_questions) != 5:
+        if (
+            not isinstance(generated_questions, list)
+            or len(generated_questions) != 5
+        ):
             raise ValueError("Expected exactly five questions.")
 
+        # Validate the AI output before exposing it to the frontend.
         for item in generated_questions:
             if not isinstance(item, dict):
                 raise ValueError("Invalid question format.")
@@ -748,7 +866,10 @@ async def generate_quiz(payload: dict, request: Request):
                 or not question.strip()
                 or not isinstance(answers, list)
                 or len(answers) != 4
-                or any(not isinstance(a, str) or not a.strip() for a in answers)
+                or any(
+                    not isinstance(answer, str) or not answer.strip()
+                    for answer in answers
+                )
                 or len(set(answers)) != 4
                 or not isinstance(correct, str)
                 or correct not in answers
@@ -757,7 +878,7 @@ async def generate_quiz(payload: dict, request: Request):
             ):
                 raise ValueError("AI returned an invalid question.")
 
-                # Save generated questions only when shared caching is enabled.
+        # Save validated questions only after all questions pass validation.
         if SHARED_CACHE_ENABLED:
             try:
                 save_study_content(
@@ -765,8 +886,10 @@ async def generate_quiz(payload: dict, request: Request):
                     "quiz",
                     {"questions": generated_questions},
                 )
-            except Exception:
-                print("Quiz cache save failed. Check backend logs.")
+            except Exception as error:
+                print(
+                    f"Quiz cache save failed: {type(error).__name__}"
+                )
 
         return {
             "message": "Quiz generated successfully.",
@@ -776,11 +899,18 @@ async def generate_quiz(payload: dict, request: Request):
     except (ValueError, TypeError, json.JSONDecodeError):
         raise HTTPException(
             status_code=502,
-            detail="The AI could not produce a valid quiz. Please try again."
+            detail=(
+                "The AI could not produce a valid quiz. "
+                "Please try again."
+            ),
         )
+
     except Exception as error:
-     print(f"Quiz generation failed: {type(error).__name__}: {error}")
-    raise HTTPException(
-        status_code=502,
-        detail="Quiz generation failed. Please try again."
-    )
+        print(
+            f"Quiz generation failed: {type(error).__name__}"
+        )
+
+        raise HTTPException(
+            status_code=502,
+            detail="Quiz generation failed. Please try again.",
+        )
