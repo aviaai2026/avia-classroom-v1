@@ -902,7 +902,7 @@ previousFlashcard.addEventListener(
 
             flashcardBack.textContent =
                 generatedFlashcards[
-                    currentFlashcard
+                currentFlashcard
                 ].answer;
 
             flashcardCounter.textContent =
@@ -1063,7 +1063,8 @@ flashcardButton.addEventListener("click", async function () {
 let savedFlashcards =
 await getGeneratedStudyDataFromDatabase(materialId, "flashcards");
 
-if (!Array.isArray(savedFlashcards) || savedFlashcards.length === 0) {
+// Regenerate older saved decks that contain fewer than 10 cards.
+if (!Array.isArray(savedFlashcards) || savedFlashcards.length < 10) {
 const materialText = await getMaterialTextForSummary(materialId);
 
 
@@ -1681,7 +1682,8 @@ async function startQuiz() {
 let savedQuestions =
 await getGeneratedStudyDataFromDatabase(materialId, "quiz");
 
-if (!Array.isArray(savedQuestions) || savedQuestions.length === 0) {
+// Regenerate older saved quizzes that contain fewer than 15 questions.
+if (!Array.isArray(savedQuestions) || savedQuestions.length < 15) {
 const materialText = await getMaterialTextForSummary(materialId);
 
 if (typeof materialText !== "string" || materialText.trim().length < 100) {
@@ -1705,10 +1707,10 @@ if (!response.ok) {
     throw new Error(data.detail || "AVIA could not generate your quiz.");
 }
 
-if (!Array.isArray(data.questions) || data.questions.length !== 5) {
-    throw new Error("AVIA returned an invalid quiz. Please try again.");
+// Accept a quiz only when all 15 questions are returned.
+if (!Array.isArray(data.questions) || data.questions.length !== 15) {
+    throw new Error("AVIA returned an incomplete quiz. Please try again.");
 }
-
 for (const item of data.questions) {
     if (
         !item ||
@@ -2657,9 +2659,26 @@ textbook.addEventListener("change", async function () {
         return;
     }
 
-    // Capture this file before awaiting network or database work.
-    const selectedFile = textbook.files[0];
-    // Preserve the exact uploaded filename for the quiz and its score card.
+   // Capture the selected file before starting asynchronous work.
+const selectedFile = textbook.files[0];
+
+// Reject oversized files before saving history or sending a request.
+const MAX_TEXTBOOK_SIZE = 20 * 1024 * 1024;
+
+if (selectedFile.size > MAX_TEXTBOOK_SIZE) {
+    const errorMessage =
+        "This textbook exceeds AVIA Classroom's 20 MB upload limit. Please choose a smaller file.";
+
+    fileName.textContent = errorMessage;
+    summaryStatus.textContent = errorMessage;
+    flashcardStatus.textContent = errorMessage;
+    quizStatus.textContent = errorMessage;
+
+    textbook.value = "";
+    return;
+}
+
+// Preserve the exact uploaded filename for the quiz and score card.
 currentQuizTitle = selectedFile.name;
     
     // Do not let study actions run before extraction is complete.
@@ -2732,10 +2751,10 @@ quizStatus.textContent = "Your textbook is ready. You can now start a quiz.";
         const errorMessage =
             error.message || "Could not process this textbook. Please try again.";
     
-        fileName.textContent = errorMessage;
-        summaryStatus.textContent = "Textbook processing failed. Please upload it again.";
-        flashcardStatus.textContent = "Textbook processing failed. Please upload it again.";
-        quizStatus.textContent = "Textbook processing failed. Please upload it again.";
+            fileName.textContent = errorMessage;
+            summaryStatus.textContent = errorMessage;
+            flashcardStatus.textContent = errorMessage;
+            quizStatus.textContent = errorMessage;
     } finally {
         // Always unlock the study actions, even if extraction fails.
         setMaterialProcessing(false);
