@@ -283,7 +283,7 @@ def chat(message: dict, request: Request):
             "reply": "AVIA's AI connection is not configured yet."
         }
 
-    consume_daily_limit(request, "chat", 10)
+    consume_daily_limit(request, "chat", 25)
 
     try:
         # Accept only user and assistant messages from conversation history.
