@@ -171,12 +171,25 @@ def generate_ai_content(feature: str, instructions: str, input_data, json_mode=F
     if json_mode:
         config_options["response_mime_type"] = "application/json"
 
-    response = client.models.generate_content(
-        model=GEMINI_MODEL,
-        contents=contents,
-        config=types.GenerateContentConfig(**config_options),
-    )
+        # Call Gemini and log safe error details if the request fails.
+    try:
+        response = client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=contents,
+            config=types.GenerateContentConfig(**config_options),
+        )
+    except Exception as error:
+        error_code = getattr(error, "code", None)
+        error_status = getattr(error, "status", None)
 
+        # Log safe diagnostic metadata without request content.
+        print(
+            f"[AVIA_GEMINI_ERROR] feature={feature} "
+            f"type={type(error).__name__} "
+            f"code={error_code} "
+            f"status={error_status}"
+        )
+        raise
     log_api_usage(feature, response)
 
     if not response.text:
