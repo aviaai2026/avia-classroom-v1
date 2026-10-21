@@ -30,7 +30,7 @@ OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-6-luna")
 app = FastAPI()
 
 PROJECT_DIR = Path(__file__).resolve().parent.parent
-MAX_UPLOAD_SIZE = 21 * 1024 * 1024
+MAX_UPLOAD_SIZE = 10 * 1024 * 1024
 SHARED_CACHE_ENABLED = True
 
 # Temporary daily usage tracking by browser ID.

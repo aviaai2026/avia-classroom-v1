@@ -2663,11 +2663,11 @@ textbook.addEventListener("change", async function () {
 const selectedFile = textbook.files[0];
 
 // Reject oversized files before saving history or sending a request.
-const MAX_TEXTBOOK_SIZE = 20 * 1024 * 1024;
+const MAX_TEXTBOOK_SIZE = 10 * 1024 * 1024;
 
 if (selectedFile.size > MAX_TEXTBOOK_SIZE) {
     const errorMessage =
-        "This textbook exceeds AVIA Classroom's 20 MB upload limit. Please choose a smaller file.";
+        "This textbook exceeds AVIA Classroom's 10 MB upload limit. Please choose a smaller file.";
 
     fileName.textContent = errorMessage;
     summaryStatus.textContent = errorMessage;
