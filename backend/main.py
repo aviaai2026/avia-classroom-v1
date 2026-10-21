@@ -10,8 +10,7 @@ import psycopg
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from google import genai
-from google.genai import types
+from openai import OpenAI
 from psycopg.types.json import Jsonb
 from pypdf import PdfReader
 
@@ -21,12 +20,13 @@ from backend.nltk_prototype import clean_text
 # Load environment variables without exposing secrets.
 load_dotenv()
 
-# Create the Gemini client only when its API key is configured.
-api_key = os.getenv("GEMINI_API_KEY")
-client = genai.Client(api_key=api_key) if api_key else None
+# Create the OpenAI client only when its API key is configured.
+api_key = os.getenv("OPENAI_API_KEY")
+client = OpenAI(api_key=api_key) if api_key else None
 
-# Use one model consistently across AVIA's AI features.
-GEMINI_MODEL = "gemini-3.8-flash"
+# Use one configurable OpenAI GPT model consistently across AVIA's AI features.
+# You can override this in .env with OPENAI_MODEL without editing the code.
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-6-luna")
 app = FastAPI()
 
 PROJECT_DIR = Path(__file__).resolve().parent.parent
@@ -68,7 +68,7 @@ def build_study_cache_key(feature: str, material_text: str) -> str:
     ).hexdigest()
 
     cache_identity = (
-        f"{GEMINI_MODEL}:prompt-v4:{feature}:{content_hash}"
+        f"openai:{OPENAI_MODEL}:prompt-v5:{feature}:{content_hash}"
     )
 
     return hashlib.sha256(
@@ -118,9 +118,9 @@ def save_study_content(
         )
 
 
-# Log Gemini token counts without exposing keys or student material.
+# Log OpenAI token counts without exposing keys or student material.
 def log_api_usage(feature: str, response):
-    usage = getattr(response, "usage_metadata", None)
+    usage = getattr(response, "usage", None)
 
     if usage is None:
         print(
@@ -129,9 +129,9 @@ def log_api_usage(feature: str, response):
         )
         return
 
-    input_tokens = getattr(usage, "prompt_token_count", None)
-    output_tokens = getattr(usage, "candidates_token_count", None)
-    total_tokens = getattr(usage, "total_token_count", None)
+    input_tokens = getattr(usage, "prompt_tokens", None)
+    output_tokens = getattr(usage, "completion_tokens", None)
+    total_tokens = getattr(usage, "total_tokens", None)
 
     print(
         f"[AVIA_USAGE] feature={feature} "
@@ -140,62 +140,61 @@ def log_api_usage(feature: str, response):
         f"total_tokens={total_tokens}"
     )
 
-# Send a prompt to Gemini and return its text response.
+
+# Send a prompt to OpenAI GPT and return its text response.
 def generate_ai_content(feature: str, instructions: str, input_data, json_mode=False):
     if client is None:
-        raise RuntimeError("Gemini API is not configured.")
+        raise RuntimeError("OpenAI API is not configured.")
 
-    # Convert chat history roles to Gemini's expected role names.
+    # Convert existing chat history into OpenAI's message format.
+    messages = [{"role": "system", "content": instructions}]
+
     if isinstance(input_data, list):
-        contents = []
-
         for item in input_data:
+            if not isinstance(item, dict):
+                continue
+
             role = item.get("role")
             content = item.get("content", "")
 
-            if role not in ("user", "assistant") or not content:
+            if role not in ("user", "assistant") or not isinstance(content, str) or not content:
                 continue
 
-            contents.append(
-                types.Content(
-                    role="model" if role == "assistant" else "user",
-                    parts=[types.Part.from_text(text=content)],
-                )
-            )
+            messages.append({"role": role, "content": content})
+    elif isinstance(input_data, str):
+        messages.append({"role": "user", "content": input_data})
     else:
-        contents = input_data
+        raise TypeError("AI input must be text or a list of chat messages.")
 
-    # Request JSON mode only for features whose existing contract requires JSON.
-    config_options = {"system_instruction": instructions}
+    # Preserve the existing JSON response contract for summaries, flashcards, and quizzes.
+    request_options = {
+        "model": OPENAI_MODEL,
+        "messages": messages,
+    }
 
     if json_mode:
-        config_options["response_mime_type"] = "application/json"
+        request_options["response_format"] = {"type": "json_object"}
 
-        # Call Gemini and log safe error details if the request fails.
+    # Log safe diagnostic metadata only; never log prompts, textbook text, or API keys.
     try:
-        response = client.models.generate_content(
-            model=GEMINI_MODEL,
-            contents=contents,
-            config=types.GenerateContentConfig(**config_options),
-        )
+        response = client.chat.completions.create(**request_options)
     except Exception as error:
-        error_code = getattr(error, "code", None)
-        error_status = getattr(error, "status", None)
-
-        # Log safe diagnostic metadata without request content.
+        error_code = getattr(error, "status_code", None)
         print(
-            f"[AVIA_GEMINI_ERROR] feature={feature} "
+            f"[AVIA_OPENAI_ERROR] feature={feature} "
             f"type={type(error).__name__} "
-            f"code={error_code} "
-            f"status={error_status}"
+            f"status={error_code}"
         )
         raise
+
     log_api_usage(feature, response)
 
-    if not response.text:
-        raise ValueError("Gemini returned an empty response.")
+    response_text = response.choices[0].message.content
+    if not response_text:
+        raise ValueError("OpenAI returned an empty response.")
 
-    return response.text
+    return response_text
+
 
 # Enforce daily AI usage limits for each browser ID.
 def consume_daily_limit(
@@ -283,7 +282,7 @@ def home():
     return {"message": "AVIA backend is running"}
 
 
-# Send the student's message to Gemini and return AVIA's response.
+# Send the student's message to OpenAI GPT and return AVIA's response.
 @app.post("/chat")
 def chat(message: dict, request: Request):
     user_message = message.get("message", "")
@@ -296,7 +295,7 @@ def chat(message: dict, request: Request):
             "reply": "AVIA's AI connection is not configured yet."
         }
 
-    consume_daily_limit(request, "chat", 25)
+    consume_daily_limit(request, "chat", 10)
 
     try:
         # Accept only user and assistant messages from conversation history.
@@ -742,7 +741,7 @@ Return valid JSON only, using this exact structure:
 """
 
     try:
-        # Generate structured flashcards through the shared Gemini helper.
+        # Generate structured flashcards through the shared OpenAI helper.
         flashcards_response = generate_ai_content(
             feature="flashcards",
             instructions=instructions,
@@ -883,7 +882,7 @@ async def generate_quiz(payload: dict, request: Request):
     consume_daily_limit(request, "quizzes", 2)
 
     try:
-        # Generate structured quiz questions through the shared Gemini helper.
+        # Generate structured quiz questions through the shared OpenAI helper.
         quiz_response = generate_ai_content(
             feature="quiz",
             instructions=(

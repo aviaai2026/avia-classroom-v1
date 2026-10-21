@@ -1,3 +1,4 @@
+
 fastapi
 uvicorn[standard]
 python-dotenv
@@ -6,4 +7,3 @@ pypdf
 psycopg[binary]
 python-multipart
 nltk==3.10.3
-google-genai==2.31.0
